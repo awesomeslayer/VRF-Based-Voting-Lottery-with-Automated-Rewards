@@ -72,7 +72,7 @@ CONTRACT_ADDRESS=""
 
 - **Private Key:** Export your Sepolia private key from MetaMask and paste it into `.env` (without `0x`).
 
-  ![Private Key](pictures/metamask.png)
+  ![Private Key](pictures/metamask_small.png)
 
 - **Testnet ETH:** Obtain Sepolia ETH from the [Google Web3 Faucet](https://cloud.google.com/application/web3/faucet/ethereum/sepolia).
   
