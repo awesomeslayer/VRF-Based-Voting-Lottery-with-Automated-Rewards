@@ -1,0 +1,513 @@
+/* frontend/style.css */
+
+:root {
+    --bg: #0f0f1a;
+    --card-bg: #1a1a2e;
+    --card-border: #2a2a4a;
+    --text: #e0e0f0;
+    --text-muted: #8888aa;
+    --primary: #6c5ce7;
+    --primary-hover: #7d6ff0;
+    --success: #00b894;
+    --success-hover: #00d9a3;
+    --warning: #fdcb6e;
+    --danger: #e17055;
+    --accent1: #a29bfe;
+    --accent2: #74b9ff;
+    --accent3: #55efc4;
+    --accent4: #ffeaa7;
+    --accent5: #fab1a0;
+    --accent6: #fd79a8;
+    --glow: rgba(108, 92, 231, 0.3);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+}
+
+.app {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+header {
+    text-align: center;
+    padding: 40px 0 30px;
+}
+
+.logo {
+    font-size: 64px;
+    margin-bottom: 10px;
+    animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+header h1 {
+    font-size: 2.2em;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.95em;
+}
+
+/* Cards */
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 20px;
+    transition: border-color 0.3s;
+}
+
+.card:hover {
+    border-color: var(--primary);
+}
+
+.card h2 {
+    font-size: 1.3em;
+    margin-bottom: 16px;
+    color: var(--accent1);
+}
+
+.card-desc {
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    font-size: 0.9em;
+}
+
+.card-small {
+    padding: 20px;
+}
+
+/* Buttons */
+.btn {
+    padding: 12px 28px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: white;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px var(--glow);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary), #7c6ff0);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-hover), #8b7ff5);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, var(--success), #00d9a3);
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, var(--success-hover), #00edb5);
+}
+
+.btn-large {
+    padding: 16px 40px;
+    font-size: 1.15em;
+}
+
+/* Connect Section */
+.connect-card {
+    text-align: center;
+}
+
+.account-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    color: var(--accent3);
+    padding: 10px;
+    background: rgba(0, 184, 148, 0.1);
+    border-radius: 10px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.dot.green {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+.warning {
+    color: var(--warning);
+    background: rgba(253, 203, 110, 0.1);
+    padding: 12px;
+    border-radius: 10px;
+    margin-top: 12px;
+    font-size: 0.9em;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Status Grid */
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 600px) {
+    .status-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.status-item {
+    text-align: center;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.status-label {
+    font-size: 0.78em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.status-value {
+    font-size: 1.3em;
+    font-weight: 700;
+}
+
+.timer {
+    color: var(--warning);
+    font-family: 'Courier New', monospace;
+    font-size: 1.6em;
+}
+
+.pot {
+    color: var(--accent3);
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.badge-open {
+    background: rgba(0, 184, 148, 0.2);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.badge-calculating {
+    background: rgba(253, 203, 110, 0.2);
+    color: var(--warning);
+    border: 1px solid var(--warning);
+    animation: pulse 1.5s infinite;
+}
+
+.badge-closed {
+    background: rgba(225, 112, 85, 0.2);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+.badge-loading {
+    background: rgba(136, 136, 170, 0.2);
+    color: var(--text-muted);
+    border: 1px solid var(--text-muted);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Options Grid */
+.options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+}
+
+.option-btn {
+    position: relative;
+    background: rgba(255, 255, 255, 0.04);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 24px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    color: var(--text);
+}
+
+.option-btn:hover:not(:disabled) {
+    border-color: var(--primary);
+    background: rgba(108, 92, 231, 0.1);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(108, 92, 231, 0.2);
+}
+
+.option-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.option-btn .option-number {
+    font-size: 2em;
+    font-weight: 800;
+    margin-bottom: 6px;
+    display: block;
+}
+
+.option-btn .option-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.option-btn .option-voters {
+    font-size: 0.8em;
+    color: var(--accent2);
+    display: block;
+}
+
+.option-btn.color-1 { --opt-color: var(--accent1); }
+.option-btn.color-2 { --opt-color: var(--accent2); }
+.option-btn.color-3 { --opt-color: var(--accent3); }
+.option-btn.color-4 { --opt-color: var(--accent4); }
+.option-btn.color-5 { --opt-color: var(--accent5); }
+.option-btn.color-6 { --opt-color: var(--accent6); }
+
+.option-btn .option-number {
+    color: var(--opt-color, var(--accent1));
+}
+
+.option-btn:hover:not(:disabled) {
+    border-color: var(--opt-color, var(--primary));
+}
+
+/* Entry Status */
+.entry-status {
+    margin-top: 16px;
+    padding: 14px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: 600;
+}
+
+.entry-status.success {
+    background: rgba(0, 184, 148, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(0, 184, 148, 0.3);
+}
+
+.entry-status.error {
+    background: rgba(225, 112, 85, 0.15);
+    color: var(--danger);
+    border: 1px solid rgba(225, 112, 85, 0.3);
+}
+
+.entry-status.pending {
+    background: rgba(253, 203, 110, 0.15);
+    color: var(--warning);
+    border: 1px solid rgba(253, 203, 110, 0.3);
+}
+
+/* Earnings Grid */
+.earnings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.earning-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+}
+
+.earning-card .earning-option {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.earning-card .earning-amount {
+    font-size: 1.2em;
+    font-weight: 700;
+    color: var(--accent3);
+}
+
+.earning-card .earning-detail {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* Winner Display */
+.winner-display {
+    text-align: center;
+    padding: 20px;
+}
+
+.winner-option {
+    font-size: 1.3em;
+    margin-bottom: 16px;
+    color: var(--accent4);
+}
+
+.winners-list {
+    margin: 16px 0;
+}
+
+.winner-addr {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    color: var(--accent3);
+    background: rgba(0, 184, 148, 0.1);
+    padding: 8px 16px;
+    border-radius: 8px;
+    margin: 6px 0;
+    display: inline-block;
+}
+
+.winner-prize {
+    font-size: 1.4em;
+    color: var(--accent3);
+    margin-top: 16px;
+}
+
+.claim-section {
+    margin-top: 24px;
+    text-align: center;
+    padding: 20px;
+    background: rgba(0, 184, 148, 0.08);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 184, 148, 0.2);
+}
+
+.claim-section p {
+    margin-bottom: 16px;
+    font-size: 1.1em;
+}
+
+.claimable-amount {
+    margin-top: 12px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+/* Activity Log */
+.activity-log {
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.82em;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.log-entry {
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+.log-info { color: var(--text-muted); }
+.log-success { color: var(--success); background: rgba(0, 184, 148, 0.08); }
+.log-warn { color: var(--warning); background: rgba(253, 203, 110, 0.08); }
+.log-error { color: var(--danger); background: rgba(225, 112, 85, 0.08); }
+
+/* Contract Info */
+.contract-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.contract-info a {
+    color: var(--accent2);
+    text-decoration: none;
+    font-size: 0.85em;
+}
+
+.contract-info a:hover {
+    text-decoration: underline;
+}
+
+.mono {
+    font-family: 'Courier New', monospace;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }

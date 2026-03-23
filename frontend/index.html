@@ -1,0 +1,137 @@
+<!-- frontend/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VRF Voting Lottery</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+    <!-- Header -->
+    <header>
+        <div class="logo">🎲</div>
+        <h1>VRF Voting Lottery</h1>
+        <p class="subtitle">Provably fair, on-chain randomness powered by Chainlink VRF</p>
+    </header>
+
+    <!-- Connection -->
+    <section class="card connect-card">
+        <button id="connectBtn" class="btn btn-primary btn-large">
+            🦊 Connect MetaMask
+        </button>
+        <div id="accountInfo" class="account-info hidden">
+            <span class="dot green"></span>
+            <span id="accountAddress"></span>
+        </div>
+        <div id="networkWarning" class="warning hidden">
+            ⚠️ Please switch to Sepolia testnet (Chain ID: 11155111)
+        </div>
+    </section>
+
+    <!-- Status Dashboard -->
+    <section class="card">
+        <h2>📊 Lottery Status</h2>
+        <div class="status-grid">
+            <div class="status-item">
+                <div class="status-label">State</div>
+                <div id="stateDisplay" class="status-value">
+                    <span class="badge badge-loading">Loading...</span>
+                </div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Time Remaining</div>
+                <div id="timerDisplay" class="status-value timer">--:--</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Current Pot</div>
+                <div id="potDisplay" class="status-value pot">0 ETH</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Total Entries</div>
+                <div id="entriesDisplay" class="status-value">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Entry Fee</div>
+                <div id="feeDisplay" class="status-value">0.01 ETH</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Winner Mode</div>
+                <div id="modeDisplay" class="status-value">--</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Voting Options -->
+    <section class="card" id="votingSection">
+        <h2>🗳️ Choose Your Option</h2>
+        <p class="card-desc">
+            Select a bin to vote. If your option wins, you share the pot
+            (or win it all, depending on the mode).
+        </p>
+        <div id="optionsGrid" class="options-grid">
+            <!-- Dynamically populated -->
+        </div>
+        <div id="entryStatus" class="entry-status hidden"></div>
+    </section>
+
+    <!-- Potential Earnings -->
+    <section class="card">
+        <h2>💰 Potential Earnings</h2>
+        <p class="card-desc">
+            Estimated payout if each option wins (based on current voters and pot).
+        </p>
+        <div id="earningsGrid" class="earnings-grid">
+            <!-- Dynamically populated -->
+        </div>
+    </section>
+
+    <!-- Winner Display -->
+    <section class="card" id="winnerSection" style="display:none;">
+        <h2>🏆 Winner Announced!</h2>
+        <div class="winner-display">
+            <div class="winner-option">
+                Winning Option: <strong id="winOptionDisplay">--</strong>
+            </div>
+            <div id="winnersList" class="winners-list"></div>
+            <div class="winner-prize">
+                Prize Pool: <strong id="winPrizeDisplay">0</strong> ETH
+            </div>
+        </div>
+        <div id="claimSection" class="claim-section hidden">
+            <p>🎉 You won! Claim your reward below.</p>
+            <button id="claimBtn" class="btn btn-success btn-large">
+                💸 Claim Reward
+            </button>
+            <div id="claimableAmount" class="claimable-amount"></div>
+        </div>
+    </section>
+
+    <!-- Transaction Log -->
+    <section class="card">
+        <h2>📜 Activity Log</h2>
+        <div id="activityLog" class="activity-log">
+            <div class="log-entry log-info">Waiting for connection...</div>
+        </div>
+    </section>
+
+    <!-- Contract Info -->
+    <section class="card card-small">
+        <h2>ℹ️ Contract</h2>
+        <div class="contract-info">
+            <span>Address:</span>
+            <a id="contractLink" href="#" target="_blank" class="mono">Not loaded</a>
+        </div>
+    </section>
+
+</div>
+
+<!-- Load ethers.js from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
