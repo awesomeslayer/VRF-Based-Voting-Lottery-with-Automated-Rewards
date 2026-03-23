@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VRF Voting Lottery</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2a2d3a;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    header {
+      text-align: center;
+      padding: 32px 0;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .status-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .status-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .status-item .label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .status-item .value {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .badge-open { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge-calculating { background: rgba(234,179,8,0.15); color: var(--yellow); }
+    .badge-closed { background: rgba(239,68,68,0.15); color: var(--red); }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .option-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .option-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .option-card.selected {
+      border-color: var(--accent);
+      background: rgba(99,102,241,0.1);
+    }
+
+    .option-card .option-number {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    .option-card .option-voters {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .option-card.winner-option {
+      border-color: var(--green);
+      background: rgba(34,197,94,0.1);
+    }
+
+    .option-card.winner-option .option-number {
+      color: var(--green);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: white;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-green {
+      background: var(--green);
+    }
+
+    .btn-green:hover:not(:disabled) {
+      background: #16a34a;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .connect-section {
+      text-align: center;
+      padding: 40px 0;
+    }
+
+    .connect-section .btn {
+      max-width: 300px;
+      margin: 0 auto;
+    }
+
+    .event-log {
+      max-height: 280px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.8rem;
+    }
+
+    .event-log .entry {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+
+    .event-log .entry:last-child { border-bottom: none; }
+
+    .event-log .timestamp {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .event-log .message { word-break: break-all; }
+    .event-log .message.enter { color: var(--accent-hover); }
+    .event-log .message.draw { color: var(--yellow); }
+    .event-log .message.winner { color: var(--green); }
+    .event-log .message.refund { color: var(--red); }
+    .event-log .message.claim { color: var(--green); }
+
+    .result-banner {
+      background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(99,102,241,0.1));
+      border: 1px solid var(--green);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .result-banner h3 {
+      color: var(--green);
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+    }
+
+    .result-banner .winner-addr {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    .refund-banner {
+      background: rgba(234,179,8,0.1);
+      border: 1px solid var(--yellow);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .refund-banner h3 {
+      color: var(--yellow);
+      margin-bottom: 8px;
+    }
+
+    .wallet-info {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    .wallet-info .addr {
+      font-family: monospace;
+      color: var(--accent-hover);
+    }
+
+    #claimable-section {
+      display: none;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--muted);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .config-section {
+      margin-bottom: 20px;
+    }
+
+    .config-section input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: monospace;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+    }
+
+    .config-section input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .config-section label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    footer a { color: var(--accent-hover); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>VRF Voting Lottery</h1>
+      <p>Decentralized, provably fair lottery powered by Chainlink VRF</p>
+    </header>
+
+    <div class="config-section card" id="config-card">
+      <h2>Contract Address</h2>
+      <label for="contract-addr-input">Paste the deployed contract address to connect</label>
+      <input type="text" id="contract-addr-input" placeholder="0x..." />
+      <button class="btn btn-primary" id="btn-set-contract">Load Contract</button>
+    </div>
+
+    <div id="app" style="display:none;">
+      <div class="status-bar">
+        <div class="status-item">
+          <div class="label">State</div>
+          <div class="value" id="state-badge"><span class="badge badge-open">OPEN</span></div>
+        </div>
+        <div class="status-item">
+          <div class="label">Time Remaining</div>
+          <div class="value" id="time-remaining">--:--</div>
+        </div>
+        <div class="status-item">
+          <div class="label">Prize Pool</div>
+          <div class="value" id="prize-pool">0 ETH</div>
+        </div>
+        <div class="status-item">
+          <div class="label">Total Entries</div>
+          <div class="value" id="total-entries">0</div>
+        </div>
+      </div>
+
+      <div id="result-area"></div>
+
+      <div class="card" id="entry-card">
+        <h2>Choose Your Option</h2>
+        <div class="options-grid" id="options-grid">
+          <div class="option-card" data-option="1" onclick="selectOption(1)">
+            <div class="option-number">1</div>
+            <div class="option-voters" id="voters-1">0 voters</div>
+          </div>
+          <div class="option-card" data-option="2" onclick="selectOption(2)">
+            <div class="option-number">2</div>
+            <div class="option-voters" id="voters-2">0 voters</div>
+          </div>
+          <div class="option-card" data-option="3" onclick="selectOption(3)">
+            <div class="option-number">3</div>
+            <div class="option-voters" id="voters-3">0 voters</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btn-enter" disabled onclick="enterLottery()">
+          Select an option to enter (0.01 ETH)
+        </button>
+      </div>
+
+      <div class="card" id="claimable-section">
+        <h2>Your Claimable Reward</h2>
+        <p style="text-align:center; font-size:1.5rem; font-weight:700; margin-bottom:16px;" id="claimable-amount">0 ETH</p>
+        <button class="btn btn-green" id="btn-claim" onclick="claimReward()">Claim Reward</button>
+      </div>
+
+      <div class="card">
+        <h2>Event Log</h2>
+        <div class="event-log" id="event-log">
+          <div class="entry"><span class="timestamp">--</span><span class="message">Waiting for events...</span></div>
+        </div>
+      </div>
+
+      <div class="wallet-info" id="wallet-info"></div>
+    </div>
+
+    <div class="connect-section" id="connect-section" style="display:none;">
+      <p style="margin-bottom:16px; color:var(--muted);">Connect your MetaMask wallet to participate</p>
+      <button class="btn btn-primary" onclick="connectWallet()">Connect MetaMask</button>
+    </div>
+
+    <footer>
+      <p>Built with Hardhat + Chainlink VRF v2.5 &mdash;
+        <a href="https://github.com/awesomeslayer/VRF-Based-Voting-Lottery-with-Automated-Rewards" target="_blank">GitHub</a>
+      </p>
+    </footer>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+  <script>
+    const CONTRACT_ABI = [
+      "function enterLottery(uint8 _option) external payable",
+      "function claimReward() external",
+      "function triggerDraw() external",
+      "function lotteryState() view returns (uint8)",
+      "function lotteryEndTime() view returns (uint256)",
+      "function entryFee() view returns (uint256)",
+      "function isDrawn() view returns (bool)",
+      "function winningOption() view returns (uint8)",
+      "function winner() view returns (address)",
+      "function prizeAmount() view returns (uint256)",
+      "function getVoterCount(uint8 _option) view returns (uint256)",
+      "function claimableBalances(address) view returns (uint256)",
+      "event LotteryEntered(address indexed player, uint8 option)",
+      "event DrawRequested(uint256 requestId)",
+      "event WinnerSelected(uint8 winningOption, address indexed winner, uint256 prize)",
+      "event NoWinnerRefund(uint8 winningOption, uint256 totalRefunded)",
+      "event RewardClaimed(address indexed winner, uint256 amount)"
+    ];
+
+    let provider, signer, contract, userAddress;
+    let selectedOption = null;
+    let contractAddress = null;
+    let refreshInterval = null;
+
+    document.getElementById("btn-set-contract").addEventListener("click", async () => {
+      const addr = document.getElementById("contract-addr-input").value.trim();
+      if (!ethers.isAddress(addr)) {
+        alert("Invalid contract address");
+        return;
+      }
+      contractAddress = addr;
+      document.getElementById("config-card").style.display = "none";
+
+      if (window.ethereum) {
+        const accounts = await window.ethereum.request({ method: "eth_accounts" });
+        if (accounts.length > 0) {
+          await initApp(accounts[0]);
+        } else {
+          document.getElementById("connect-section").style.display = "block";
+        }
+      } else {
+        document.getElementById("connect-section").style.display = "block";
+        document.querySelector("#connect-section p").textContent = "MetaMask not detected. Please install MetaMask.";
+      }
+    });
+
+    async function connectWallet() {
+      if (!window.ethereum) { alert("Install MetaMask"); return; }
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      await initApp(accounts[0]);
+    }
+
+    async function initApp(account) {
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      userAddress = account;
+      contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+
+      document.getElementById("connect-section").style.display = "none";
+      document.getElementById("app").style.display = "block";
+      document.getElementById("wallet-info").innerHTML =
+        `Connected: <span class="addr">${userAddress.slice(0,6)}...${userAddress.slice(-4)}</span>`;
+
+      listenToEvents();
+      refreshState();
+      refreshInterval = setInterval(refreshState, 5000);
+
+      window.ethereum.on("accountsChanged", (accs) => {
+        if (accs.length === 0) location.reload();
+        else { userAddress = accs[0]; initApp(userAddress); }
+      });
+    }
+
+    async function refreshState() {
+      try {
+        const state = await contract.lotteryState();
+        const endTime = await contract.lotteryEndTime();
+        const entryFee = await contract.entryFee();
+        const isDrawn = await contract.isDrawn();
+
+        const v1 = await contract.getVoterCount(1);
+        const v2 = await contract.getVoterCount(2);
+        const v3 = await contract.getVoterCount(3);
+        const total = Number(v1) + Number(v2) + Number(v3);
+        const pool = ethers.formatEther(entryFee * BigInt(total));
+
+        document.getElementById("voters-1").textContent = `${v1} voters`;
+        document.getElementById("voters-2").textContent = `${v2} voters`;
+        document.getElementById("voters-3").textContent = `${v3} voters`;
+        document.getElementById("prize-pool").textContent = `${pool} ETH`;
+        document.getElementById("total-entries").textContent = total;
+
+        const stateNames = ["OPEN", "CALCULATING", "CLOSED"];
+        const stateClasses = ["badge-open", "badge-calculating", "badge-closed"];
+        document.getElementById("state-badge").innerHTML =
+          `<span class="badge ${stateClasses[state]}">${stateNames[state]}</span>`;
+
+        const now = Math.floor(Date.now() / 1000);
+        const end = Number(endTime);
+        if (state === 0n && now < end) {
+          const diff = end - now;
+          const m = Math.floor(diff / 60);
+          const s = diff % 60;
+          document.getElementById("time-remaining").textContent = `${m}:${String(s).padStart(2, "0")}`;
+        } else if (state === 0n) {
+          document.getElementById("time-remaining").textContent = "Ended";
+        } else {
+          document.getElementById("time-remaining").textContent = "--";
+        }
+
+        if (Number(state) >= 2 && isDrawn) {
+          const winOpt = await contract.winningOption();
+          const winnerAddr = await contract.winner();
+          const prize = await contract.prizeAmount();
+
+          document.querySelectorAll(".option-card").forEach((el) => {
+            el.classList.remove("winner-option");
+            if (Number(el.dataset.option) === Number(winOpt)) {
+              el.classList.add("winner-option");
+            }
+          });
+
+          const resultArea = document.getElementById("result-area");
+          if (winnerAddr === ethers.ZeroAddress) {
+            resultArea.innerHTML = `
+              <div class="refund-banner">
+                <h3>No Winner — Refunds Issued</h3>
+                <p>Winning option was <strong>${winOpt}</strong>, but no one voted for it.</p>
+                <p style="margin-top:8px; color:var(--muted);">All participants can claim their entry fee back.</p>
+              </div>`;
+          } else {
+            resultArea.innerHTML = `
+              <div class="result-banner">
+                <h3>Winner — Option ${winOpt}!</h3>
+                <p class="winner-addr">${winnerAddr}</p>
+                <p style="margin-top:8px;">Prize: <strong>${ethers.formatEther(prize)} ETH</strong></p>
+              </div>`;
+          }
+
+          document.getElementById("entry-card").style.display = "none";
+        }
+
+        if (userAddress) {
+          const claimable = await contract.claimableBalances(userAddress);
+          if (claimable > 0n) {
+            document.getElementById("claimable-section").style.display = "block";
+            document.getElementById("claimable-amount").textContent =
+              `${ethers.formatEther(claimable)} ETH`;
+          } else {
+            document.getElementById("claimable-section").style.display = "none";
+          }
+        }
+      } catch (err) {
+        console.error("refreshState error:", err);
+      }
+    }
+
+    function selectOption(opt) {
+      selectedOption = opt;
+      document.querySelectorAll(".option-card").forEach((el) => {
+        el.classList.toggle("selected", Number(el.dataset.option) === opt);
+      });
+      const btn = document.getElementById("btn-enter");
+      btn.disabled = false;
+      btn.textContent = `Enter with Option ${opt} (0.01 ETH)`;
+    }
+
+    async function enterLottery() {
+      if (!selectedOption) return;
+      const btn = document.getElementById("btn-enter");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Processing...';
+      try {
+        const fee = await contract.entryFee();
+        const tx = await contract.enterLottery(selectedOption, { value: fee });
+        await tx.wait();
+        btn.textContent = "Entry confirmed!";
+        setTimeout(() => {
+          btn.textContent = `Enter with Option ${selectedOption} (0.01 ETH)`;
+          btn.disabled = false;
+        }, 2000);
+        refreshState();
+      } catch (err) {
+        console.error(err);
+        btn.textContent = err.reason || "Transaction failed";
+        btn.disabled = false;
+        setTimeout(() => {
+          btn.textContent = `Enter with Option ${selectedOption} (0.01 ETH)`;
+        }, 3000);
+      }
+    }
+
+    async function claimReward() {
+      const btn = document.getElementById("btn-claim");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Claiming...';
+      try {
+        const tx = await contract.claimReward();
+        await tx.wait();
+        btn.textContent = "Claimed!";
+        refreshState();
+      } catch (err) {
+        console.error(err);
+        btn.textContent = err.reason || "Claim failed";
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = "Claim Reward"; }, 3000);
+      }
+    }
+
+    function addLog(message, type = "") {
+      const log = document.getElementById("event-log");
+      const now = new Date().toLocaleTimeString();
+      const entry = document.createElement("div");
+      entry.className = "entry";
+      entry.innerHTML = `<span class="timestamp">${now}</span><span class="message ${type}">${message}</span>`;
+
+      if (log.children.length === 1 && log.children[0].querySelector(".message")?.textContent === "Waiting for events...") {
+        log.innerHTML = "";
+      }
+      log.prepend(entry);
+    }
+
+    function listenToEvents() {
+      contract.on("LotteryEntered", (player, option) => {
+        const short = `${player.slice(0,6)}...${player.slice(-4)}`;
+        addLog(`${short} entered with option ${option}`, "enter");
+        refreshState();
+      });
+
+      contract.on("DrawRequested", (requestId) => {
+        addLog(`Draw requested (ID: ${requestId})`, "draw");
+        refreshState();
+      });
+
+      contract.on("WinnerSelected", (winOpt, winnerAddr, prize) => {
+        const short = `${winnerAddr.slice(0,6)}...${winnerAddr.slice(-4)}`;
+        addLog(`Winner: ${short} (Option ${winOpt}) — ${ethers.formatEther(prize)} ETH`, "winner");
+        refreshState();
+      });
+
+      contract.on("NoWinnerRefund", (winOpt, totalRefunded) => {
+        addLog(`No winner for option ${winOpt}. Refunding ${ethers.formatEther(totalRefunded)} ETH`, "refund");
+        refreshState();
+      });
+
+      contract.on("RewardClaimed", (winnerAddr, amount) => {
+        const short = `${winnerAddr.slice(0,6)}...${winnerAddr.slice(-4)}`;
+        addLog(`${short} claimed ${ethers.formatEther(amount)} ETH`, "claim");
+        refreshState();
+      });
+    }
+  </script>
+</body>
+</html>

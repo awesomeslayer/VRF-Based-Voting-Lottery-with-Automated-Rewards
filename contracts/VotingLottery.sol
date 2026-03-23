@@ -6,14 +6,14 @@ import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/V
 
 contract VotingLottery is VRFConsumerBaseV2Plus {
     uint256 public s_subscriptionId;
-    bytes32 public keyHash; 
-    uint32 public callbackGasLimit = 50000;
+    bytes32 public keyHash;
+    uint32 public callbackGasLimit = 200000;
     uint16 public requestConfirmations = 3;
     uint32 public numWords = 1;
 
     uint256 public entryFee;
     uint256 public lotteryEndTime;
-    bool public isDrawn; 
+    bool public isDrawn;
 
     enum LotteryState { OPEN, CALCULATING, CLOSED }
     LotteryState public lotteryState;
@@ -21,9 +21,14 @@ contract VotingLottery is VRFConsumerBaseV2Plus {
     mapping(uint8 => address[]) public votersByOption;
     mapping(address => uint256) public claimableBalances;
 
+    uint8 public winningOption;
+    address public winner;
+    uint256 public prizeAmount;
+
     event LotteryEntered(address indexed player, uint8 option);
     event DrawRequested(uint256 requestId);
     event WinnerSelected(uint8 winningOption, address indexed winner, uint256 prize);
+    event NoWinnerRefund(uint8 winningOption, uint256 totalRefunded);
     event RewardClaimed(address indexed winner, uint256 amount);
 
     constructor(
@@ -50,10 +55,18 @@ contract VotingLottery is VRFConsumerBaseV2Plus {
         emit LotteryEntered(msg.sender, _option);
     }
 
+    function getVotersByOption(uint8 _option) external view returns (address[] memory) {
+        return votersByOption[_option];
+    }
+
+    function getVoterCount(uint8 _option) external view returns (uint256) {
+        return votersByOption[_option].length;
+    }
+
     function triggerDraw() external {
         require(lotteryState == LotteryState.OPEN, "Already drawing or closed");
         require(block.timestamp >= lotteryEndTime, "Entry window is still open");
-        
+
         lotteryState = LotteryState.CALCULATING;
 
         uint256 requestId = s_vrfCoordinator.requestRandomWords(
@@ -75,23 +88,36 @@ contract VotingLottery is VRFConsumerBaseV2Plus {
         require(lotteryState == LotteryState.CALCULATING, "Not calculating");
 
         uint256 randomWord = _randomWords[0];
-        uint8 winningOption = uint8((randomWord % 3) + 1);
+        uint8 selectedOption = uint8((randomWord % 3) + 1);
+        winningOption = selectedOption;
 
-        address[] memory winnersOfOption = votersByOption[winningOption];
+        address[] memory winnersOfOption = votersByOption[selectedOption];
         uint256 pot = address(this).balance;
 
         if (winnersOfOption.length > 0) {
             uint256 winnerIndex = (randomWord / 100) % winnersOfOption.length;
             address absoluteWinner = winnersOfOption[winnerIndex];
 
+            winner = absoluteWinner;
+            prizeAmount = pot;
             claimableBalances[absoluteWinner] += pot;
-            emit WinnerSelected(winningOption, absoluteWinner, pot);
+            emit WinnerSelected(selectedOption, absoluteWinner, pot);
         } else {
-            emit WinnerSelected(winningOption, address(0), 0);
+            _refundAllParticipants();
+            emit NoWinnerRefund(selectedOption, pot);
         }
 
         lotteryState = LotteryState.CLOSED;
         isDrawn = true;
+    }
+
+    function _refundAllParticipants() internal {
+        for (uint8 opt = 1; opt <= 3; opt++) {
+            address[] memory voters = votersByOption[opt];
+            for (uint256 i = 0; i < voters.length; i++) {
+                claimableBalances[voters[i]] += entryFee;
+            }
+        }
     }
 
     function claimReward() external {
