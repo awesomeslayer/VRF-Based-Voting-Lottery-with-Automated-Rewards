@@ -1,9 +1,10 @@
 import os
 import time
+from pathlib import Path
 from web3 import Web3
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 w3 = Web3(Web3.HTTPProvider(os.getenv("RPC_URL")))
 account = w3.eth.account.from_key(os.getenv("PRIVATE_KEY"))
@@ -26,27 +27,34 @@ def monitor():
             end_time = round_data[2]
             
             if state == 0 and time.time() > end_time:
-                print(f"⏰ Round {round_id} ended! Triggering draw...")
-                tx = contract.functions.triggerDraw().build_transaction({
-                    'from': account.address,
-                    'nonce': w3.eth.get_transaction_count(account.address),
-                    'gas': 300000,
-                    'gasPrice': w3.eth.gas_price
-                })
-                signed_tx = w3.eth.account.sign_transaction(tx, private_key=account.key)
-                tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-                print(f"✅ Triggered! Hash: {tx_hash.hex()}")
+                entries = round_data[9]
+                if entries == 0:
+                    print(f"⚠️  Round {round_id} ended but has 0 participants. Cannot draw.")
+                else:
+                    print(f"⏰ Round {round_id} ended ({entries} participants)! Triggering draw...")
+                    tx = contract.functions.triggerDraw().build_transaction({
+                        'from': account.address,
+                        'nonce': w3.eth.get_transaction_count(account.address),
+                        'gas': 300000,
+                    })
+                    signed_tx = w3.eth.account.sign_transaction(tx, private_key=account.key)
+                    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+                    print(f"✅ Triggered! TX: {tx_hash.hex()}")
             
+            if state == 0 and time.time() <= end_time:
+                remaining = int(end_time - time.time())
+                print(f"⏳ Round {round_id} OPEN — {remaining}s remaining, {round_data[9]} entries")
+
             elif state == 1:
-                print(f"⏳ VRF is calculating for Round {round_id}...")
+                print(f"⏳ Round {round_id} — VRF is calculating...")
             
             elif state == 2:
-                print(f"🏁 Round {round_id} is CLOSED. Waiting for owner to start new round.")
+                print(f"🏁 Round {round_id} CLOSED. Winning option: {round_data[7]}")
 
         except Exception as e:
             print(f"❌ Error: {e}")
         
-        time.sleep(30)
+        time.sleep(15)
 
 if __name__ == "__main__":
     monitor()

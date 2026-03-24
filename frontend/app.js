@@ -1,43 +1,50 @@
-// frontend/app.js
+// frontend/app.js — VotingLotteryMultiRound frontend
 
-// ── CONFIGURATION ──
-// Set your contract address here, or it will be read from abi.json fetch context
 let CONTRACT_ADDRESS = "";
-
 let provider = null;
 let signer = null;
 let contract = null;
 let contractAbi = null;
 let userAddress = null;
-let lotteryInfo = null;
+let roundData = null;
+let voterCounts = [];
 let refreshInterval = null;
 let timerInterval = null;
 let endTimeCache = 0;
+let currentRoundId = 0;
+let userVotedOption = 0;
+let resultShown = false;
 
-const COLORS = ["color-1", "color-2", "color-3", "color-4", "color-5", "color-6"];
-const OPTION_EMOJIS = ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠", "⚪", "🟤"];
+const OPTION_COLORS = [
+    "#6c5ce7", "#00b894", "#e17055", "#fdcb6e",
+    "#a29bfe", "#74b9ff", "#fd79a8", "#55efc4",
+    "#fab1a0", "#81ecec"
+];
+
+const OPTION_LABELS = [
+    "Alpha", "Beta", "Gamma", "Delta",
+    "Epsilon", "Zeta", "Eta", "Theta",
+    "Iota", "Kappa"
+];
 
 // ── INIT ──
 document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("connectBtn").addEventListener("click", connectWallet);
     document.getElementById("claimBtn")?.addEventListener("click", claimReward);
+    document.getElementById("winClaimBtn")?.addEventListener("click", claimReward);
 
-    // Try to load ABI
     try {
         const resp = await fetch("abi.json");
         contractAbi = await resp.json();
         log("ABI loaded.", "info");
-    } catch (e) {
-        log("⚠️ Could not load abi.json. Deploy the contract first.", "error");
+    } catch {
+        log("Could not load abi.json. Deploy the contract first.", "error");
         return;
     }
 
-    // Check if MetaMask is already connected
     if (typeof window.ethereum !== "undefined") {
         const accounts = await window.ethereum.request({ method: "eth_accounts" });
-        if (accounts.length > 0) {
-            await connectWallet();
-        }
+        if (accounts.length > 0) await connectWallet();
     }
 });
 
@@ -45,10 +52,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function connectWallet() {
     if (typeof window.ethereum === "undefined") {
         log("MetaMask not detected!", "error");
-        alert("Please install MetaMask to use this dApp.");
+        alert("Please install MetaMask.");
         return;
     }
-
     try {
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
         provider = new ethers.BrowserProvider(window.ethereum);
@@ -56,28 +62,23 @@ async function connectWallet() {
         userAddress = accounts[0];
 
         const network = await provider.getNetwork();
-        const chainId = Number(network.chainId);
-
         document.getElementById("connectBtn").classList.add("hidden");
         document.getElementById("accountInfo").classList.remove("hidden");
         document.getElementById("accountAddress").textContent =
             userAddress.slice(0, 6) + "..." + userAddress.slice(-4);
 
-        if (chainId !== 11155111) {
+        if (Number(network.chainId) !== 11155111 && Number(network.chainId) !== 1337) {
             document.getElementById("networkWarning").classList.remove("hidden");
-            log("Wrong network! Switch to Sepolia.", "warn");
+            log("Wrong network! Switch to Sepolia or local Hardhat.", "warn");
             return;
         }
 
         document.getElementById("networkWarning").classList.add("hidden");
         log(`Connected: ${userAddress.slice(0, 10)}...`, "success");
-
         await initContract();
 
-        // Listen for account/network changes
         window.ethereum.on("accountsChanged", () => window.location.reload());
         window.ethereum.on("chainChanged", () => window.location.reload());
-
     } catch (err) {
         log(`Connection failed: ${err.message}`, "error");
     }
@@ -85,54 +86,49 @@ async function connectWallet() {
 
 // ── INIT CONTRACT ──
 async function initContract() {
-    // Read contract address from environment or prompt
     if (!CONTRACT_ADDRESS) {
-        // Try to get from a meta tag or prompt
         const stored = localStorage.getItem("CONTRACT_ADDRESS");
         if (stored) {
             CONTRACT_ADDRESS = stored;
         } else {
-            CONTRACT_ADDRESS = prompt(
-                "Enter the deployed contract address (from .env):",
-                "0x..."
-            );
-            if (CONTRACT_ADDRESS) {
-                localStorage.setItem("CONTRACT_ADDRESS", CONTRACT_ADDRESS);
-            }
+            CONTRACT_ADDRESS = prompt("Enter the deployed contract address:", "0x...");
+            if (CONTRACT_ADDRESS) localStorage.setItem("CONTRACT_ADDRESS", CONTRACT_ADDRESS);
         }
     }
-
     if (!CONTRACT_ADDRESS || CONTRACT_ADDRESS === "0x...") {
-        log("No contract address provided.", "error");
+        log("No contract address.", "error");
         return;
     }
 
     try {
         contract = new ethers.Contract(CONTRACT_ADDRESS, contractAbi, signer);
-
-        // Update contract link
         const link = document.getElementById("contractLink");
         link.textContent = CONTRACT_ADDRESS.slice(0, 10) + "..." + CONTRACT_ADDRESS.slice(-8);
         link.href = `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
-
         log(`Contract loaded: ${CONTRACT_ADDRESS.slice(0, 10)}...`, "success");
 
         await refreshAll();
-
-        // Auto-refresh every 10 seconds
         if (refreshInterval) clearInterval(refreshInterval);
-        refreshInterval = setInterval(refreshAll, 10000);
-
+        refreshInterval = setInterval(refreshAll, 8000);
     } catch (err) {
         log(`Failed to init contract: ${err.message}`, "error");
     }
 }
 
-// ── REFRESH ALL DATA ──
+// ── REFRESH ALL ──
 async function refreshAll() {
     try {
-        const info = await contract.getLotteryInfo();
-        lotteryInfo = {
+        currentRoundId = Number(await contract.currentRoundId());
+        if (currentRoundId === 0) {
+            log("No round started yet. Owner needs to start a round.", "warn");
+            document.getElementById("roundBadge").textContent = "No active round";
+            return;
+        }
+
+        document.getElementById("roundBadge").textContent = `Round #${currentRoundId}`;
+
+        const info = await contract.getRoundInfo(currentRoundId);
+        roundData = {
             state: Number(info[0]),
             pot: info[1],
             endTime: Number(info[2]),
@@ -142,17 +138,21 @@ async function refreshAll() {
             totalEntries: Number(info[6]),
             isDrawn: info[7],
             winningOption: Number(info[8]),
-            lastPrize: info[9],
         };
+        endTimeCache = roundData.endTime;
 
-        endTimeCache = lotteryInfo.endTime;
+        voterCounts = [];
+        for (let i = 1; i <= roundData.numOptions; i++) {
+            const c = Number(await contract.getVoterCount(currentRoundId, i));
+            voterCounts.push(c);
+        }
 
         updateStatusDisplay();
-        await updateOptionsGrid();
-        await updateEarningsGrid();
-        await updateWinnerSection();
+        updateDistribution();
+        updateOdds();
+        updateOptionsGrid();
+        updateWinnerSection();
         startTimer();
-
     } catch (err) {
         log(`Refresh error: ${err.message}`, "error");
     }
@@ -166,145 +166,121 @@ function updateStatusDisplay() {
     const feeEl = document.getElementById("feeDisplay");
     const modeEl = document.getElementById("modeDisplay");
 
-    // State badge
     const stateNames = ["OPEN", "CALCULATING", "CLOSED"];
     const badgeClasses = ["badge-open", "badge-calculating", "badge-closed"];
-    const stateName = stateNames[lotteryInfo.state] || "UNKNOWN";
-    stateEl.innerHTML = `<span class="badge ${badgeClasses[lotteryInfo.state]}">${stateName}</span>`;
+    stateEl.innerHTML = `<span class="badge ${badgeClasses[roundData.state]}">${stateNames[roundData.state]}</span>`;
 
-    // Pot
-    const potEth = ethers.formatEther(lotteryInfo.pot);
+    const potEth = ethers.formatEther(roundData.pot);
     potEl.textContent = `${parseFloat(potEth).toFixed(4)} ETH`;
+    entriesEl.textContent = roundData.totalEntries;
 
-    // Entries
-    entriesEl.textContent = lotteryInfo.totalEntries;
-
-    // Fee
-    const feeEth = ethers.formatEther(lotteryInfo.entryFee);
+    const feeEth = ethers.formatEther(roundData.entryFee);
     feeEl.textContent = `${feeEth} ETH`;
-
-    // Mode
-    modeEl.textContent = lotteryInfo.splitAmongAll ? "Split Among All" : "Single Winner";
+    modeEl.textContent = roundData.splitAmongAll ? "Split Among All" : "Single Random Winner";
 }
 
-// ── TIMER ──
-function startTimer() {
-    if (timerInterval) clearInterval(timerInterval);
+// ── VOTE DISTRIBUTION BARS ──
+function updateDistribution() {
+    const container = document.getElementById("distributionBars");
+    container.innerHTML = "";
+    const total = roundData.totalEntries || 1;
 
-    function updateTimer() {
-        const now = Math.floor(Date.now() / 1000);
-        const remaining = Math.max(0, endTimeCache - now);
-        const timerEl = document.getElementById("timerDisplay");
+    for (let i = 0; i < roundData.numOptions; i++) {
+        const count = voterCounts[i];
+        const pct = ((count / total) * 100).toFixed(1);
+        const color = OPTION_COLORS[i % OPTION_COLORS.length];
+        const label = OPTION_LABELS[i % OPTION_LABELS.length];
 
-        if (remaining <= 0) {
-            if (lotteryInfo.state === 0) {
-                timerEl.textContent = "⏰ EXPIRED";
-                timerEl.style.color = "var(--danger)";
-            } else if (lotteryInfo.state === 1) {
-                timerEl.textContent = "⏳ Drawing...";
-                timerEl.style.color = "var(--warning)";
+        const row = document.createElement("div");
+        row.className = "dist-row";
+        row.innerHTML = `
+            <div class="dist-label" style="color:${color}">${label}</div>
+            <div class="dist-bar-wrap">
+                <div class="dist-bar" style="width:${roundData.totalEntries > 0 ? pct : 0}%;background:${color}"></div>
+            </div>
+            <div class="dist-stats">
+                <span class="dist-count">${count}</span>
+                <span class="dist-pct">${roundData.totalEntries > 0 ? pct : "0.0"}%</span>
+            </div>
+        `;
+        container.appendChild(row);
+    }
+}
+
+// ── ODDS & PAYOUTS (casino-style) ──
+function updateOdds() {
+    const grid = document.getElementById("oddsGrid");
+    grid.innerHTML = "";
+    const total = roundData.totalEntries;
+    const potWei = roundData.pot;
+
+    for (let i = 0; i < roundData.numOptions; i++) {
+        const count = voterCounts[i];
+        const color = OPTION_COLORS[i % OPTION_COLORS.length];
+        const label = OPTION_LABELS[i % OPTION_LABELS.length];
+
+        let coefficient, payoutText, impliedProb;
+
+        if (roundData.splitAmongAll) {
+            if (count > 0) {
+                coefficient = (total / count).toFixed(2);
+                const share = potWei / BigInt(count);
+                payoutText = `${parseFloat(ethers.formatEther(share)).toFixed(4)} ETH`;
             } else {
-                timerEl.textContent = "🏁 Finished";
-                timerEl.style.color = "var(--text-muted)";
+                coefficient = total > 0 ? `${total + 1}.00` : "-.--";
+                payoutText = total > 0 ? `${parseFloat(ethers.formatEther(potWei + roundData.entryFee)).toFixed(4)} ETH` : "-- ETH";
             }
-            return;
+            impliedProb = total > 0 ? ((1 / parseFloat(coefficient || total)) * 100).toFixed(1) : "--";
+        } else {
+            if (count > 0) {
+                coefficient = (total / count).toFixed(2);
+                payoutText = `${parseFloat(ethers.formatEther(potWei)).toFixed(4)} ETH`;
+            } else {
+                coefficient = total > 0 ? `${total + 1}.00` : "-.--";
+                payoutText = `${parseFloat(ethers.formatEther(potWei)).toFixed(4)} ETH`;
+            }
+            impliedProb = total > 0 && count > 0 ? ((count / total) * 100).toFixed(1) : "--";
         }
 
-        const mins = Math.floor(remaining / 60);
-        const secs = remaining % 60;
-        timerEl.textContent = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-        timerEl.style.color = remaining < 60 ? "var(--danger)" : "var(--warning)";
+        const card = document.createElement("div");
+        card.className = "odds-card";
+        card.innerHTML = `
+            <div class="odds-label" style="border-left:3px solid ${color}">${label}</div>
+            <div class="odds-coeff">${coefficient}x</div>
+            <div class="odds-payout">${payoutText}</div>
+            <div class="odds-prob">${impliedProb}% implied</div>
+        `;
+        grid.appendChild(card);
     }
-
-    updateTimer();
-    timerInterval = setInterval(updateTimer, 1000);
 }
 
 // ── OPTIONS GRID ──
-async function updateOptionsGrid() {
+function updateOptionsGrid() {
     const grid = document.getElementById("optionsGrid");
     grid.innerHTML = "";
-
-    const numOpts = lotteryInfo.numOptions;
-    const isOpen = lotteryInfo.state === 0;
+    const isOpen = roundData.state === 0;
     const now = Math.floor(Date.now() / 1000);
-    const canVote = isOpen && now < lotteryInfo.endTime;
+    const canVote = isOpen && now < roundData.endTime;
 
-    for (let i = 1; i <= numOpts; i++) {
-        let voterCount = 0;
-        try {
-            voterCount = Number(await contract.getVoterCount(i));
-        } catch (e) { /* ignore */ }
+    for (let i = 0; i < roundData.numOptions; i++) {
+        const color = OPTION_COLORS[i % OPTION_COLORS.length];
+        const label = OPTION_LABELS[i % OPTION_LABELS.length];
+        const count = voterCounts[i];
+        const optionNum = i + 1;
 
         const btn = document.createElement("button");
-        btn.className = `option-btn ${COLORS[(i - 1) % COLORS.length]}`;
+        btn.className = "option-btn";
         btn.disabled = !canVote;
-
-        const emoji = OPTION_EMOJIS[(i - 1) % OPTION_EMOJIS.length];
+        btn.style.setProperty("--opt-color", color);
 
         btn.innerHTML = `
-            <span class="option-number">${emoji} ${i}</span>
-            <span class="option-label">Option ${i}</span>
-            <span class="option-voters">${voterCount} voter${voterCount !== 1 ? "s" : ""}</span>
+            <span class="option-number" style="color:${color}">${optionNum}</span>
+            <span class="option-label">${label}</span>
+            <span class="option-voters">${count} voter${count !== 1 ? "s" : ""}</span>
         `;
 
-        btn.addEventListener("click", () => enterLottery(i));
+        btn.addEventListener("click", () => enterLottery(optionNum));
         grid.appendChild(btn);
-    }
-}
-
-// ── EARNINGS GRID ──
-async function updateEarningsGrid() {
-    const grid = document.getElementById("earningsGrid");
-    grid.innerHTML = "";
-
-    const numOpts = lotteryInfo.numOptions;
-    const potWei = lotteryInfo.pot;
-    // Hypothetical pot includes the user's potential entry
-    const entryFeeWei = lotteryInfo.entryFee;
-    // If user hasn't entered yet, the pot after their entry would be pot + entryFee
-    // We'll show current pot for simplicity
-
-    for (let i = 1; i <= numOpts; i++) {
-        let voterCount = 0;
-        try {
-            voterCount = Number(await contract.getVoterCount(i));
-        } catch (e) { /* ignore */ }
-
-        const card = document.createElement("div");
-        card.className = "earning-card";
-
-        let earningText = "0 ETH";
-        let detailText = "No voters yet";
-
-        if (lotteryInfo.splitAmongAll) {
-            if (voterCount > 0) {
-                const share = potWei / BigInt(voterCount);
-                earningText = `${parseFloat(ethers.formatEther(share)).toFixed(4)} ETH`;
-                detailText = `Pot ÷ ${voterCount} voters`;
-            } else {
-                // If they'd be the first voter, they'd get the whole pot
-                earningText = `${parseFloat(ethers.formatEther(potWei + entryFeeWei)).toFixed(4)} ETH`;
-                detailText = "You'd be first! Full pot";
-            }
-        } else {
-            // Single winner mode
-            earningText = `${parseFloat(ethers.formatEther(potWei)).toFixed(4)} ETH`;
-            if (voterCount > 0) {
-                const chance = (100 / voterCount).toFixed(1);
-                detailText = `1/${voterCount} chance (${chance}%)`;
-            } else {
-                detailText = "Guaranteed if option wins";
-            }
-        }
-
-        card.innerHTML = `
-            <div class="earning-option">${OPTION_EMOJIS[(i - 1) % OPTION_EMOJIS.length]} Option ${i}</div>
-            <div class="earning-amount">${earningText}</div>
-            <div class="earning-detail">${detailText}</div>
-        `;
-
-        grid.appendChild(card);
     }
 }
 
@@ -313,41 +289,70 @@ async function enterLottery(option) {
     const statusEl = document.getElementById("entryStatus");
     statusEl.classList.remove("hidden", "success", "error", "pending");
     statusEl.classList.add("pending");
-    statusEl.textContent = `⏳ Sending transaction for Option ${option}...`;
+    statusEl.textContent = `Sending transaction for Option ${option}...`;
 
     try {
-        const tx = await contract.enterLottery(option, {
-            value: lotteryInfo.entryFee,
-        });
-
+        const tx = await contract.enterLottery(option, { value: roundData.entryFee });
         log(`TX sent: ${tx.hash.slice(0, 14)}...`, "warn");
-        statusEl.textContent = `⏳ Waiting for confirmation... TX: ${tx.hash.slice(0, 14)}...`;
+        statusEl.textContent = `Waiting for confirmation... TX: ${tx.hash.slice(0, 14)}...`;
 
         const receipt = await tx.wait();
-
         if (receipt.status === 1) {
+            userVotedOption = option;
             statusEl.classList.remove("pending");
             statusEl.classList.add("success");
-            statusEl.textContent = `✅ Successfully voted for Option ${option}!`;
+            statusEl.textContent = `Successfully voted for ${OPTION_LABELS[(option - 1) % OPTION_LABELS.length]}!`;
             log(`Entered Option ${option}! TX confirmed.`, "success");
             await refreshAll();
         } else {
             throw new Error("Transaction reverted");
         }
-
     } catch (err) {
         statusEl.classList.remove("pending");
         statusEl.classList.add("error");
-
         let msg = err.reason || err.message || "Unknown error";
-        if (msg.includes("Incorrect entry fee")) msg = "Incorrect entry fee (must be exactly 0.01 ETH)";
-        if (msg.includes("not open")) msg = "Lottery is not currently open";
-        if (msg.includes("Entry window is closed")) msg = "Entry window has closed";
+        if (msg.includes("Wrong fee")) msg = "Incorrect entry fee";
+        if (msg.includes("Not open")) msg = "Lottery is not currently open";
+        if (msg.includes("Time's up")) msg = "Entry window has closed";
         if (msg.includes("user rejected")) msg = "Transaction rejected by user";
-
-        statusEl.textContent = `❌ ${msg}`;
+        statusEl.textContent = msg;
         log(`Entry failed: ${msg}`, "error");
     }
+}
+
+// ── TIMER ──
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    function tick() {
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = Math.max(0, endTimeCache - now);
+        const el = document.getElementById("timerDisplay");
+
+        if (remaining <= 0) {
+            if (roundData.state === 0) {
+                el.textContent = "EXPIRED — awaiting draw";
+                el.style.color = "var(--danger)";
+            } else if (roundData.state === 1) {
+                el.textContent = "Drawing...";
+                el.style.color = "var(--warning)";
+            } else {
+                el.textContent = "Finished";
+                el.style.color = "var(--text-muted)";
+            }
+            return;
+        }
+        const h = Math.floor(remaining / 3600);
+        const m = Math.floor((remaining % 3600) / 60);
+        const s = remaining % 60;
+        if (h > 0) {
+            el.textContent = `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+        } else {
+            el.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+        }
+        el.style.color = remaining < 60 ? "var(--danger)" : "var(--warning)";
+    }
+    tick();
+    timerInterval = setInterval(tick, 1000);
 }
 
 // ── WINNER SECTION ──
@@ -355,25 +360,21 @@ async function updateWinnerSection() {
     const section = document.getElementById("winnerSection");
     const claimSection = document.getElementById("claimSection");
 
-    if (!lotteryInfo.isDrawn) {
+    if (!roundData.isDrawn) {
         section.style.display = "none";
         return;
     }
 
     section.style.display = "block";
-
-    document.getElementById("winOptionDisplay").textContent =
-        `${OPTION_EMOJIS[(lotteryInfo.winningOption - 1) % OPTION_EMOJIS.length]} Option ${lotteryInfo.winningOption}`;
-
-    const prizeEth = ethers.formatEther(lotteryInfo.lastPrize);
+    const winLabel = OPTION_LABELS[(roundData.winningOption - 1) % OPTION_LABELS.length];
+    document.getElementById("winOptionDisplay").textContent = `${winLabel} (#${roundData.winningOption})`;
+    const prizeEth = ethers.formatEther(roundData.pot);
     document.getElementById("winPrizeDisplay").textContent = parseFloat(prizeEth).toFixed(4);
 
-    // Get winners list
     try {
-        const winners = await contract.getWinners();
+        const winners = await contract.getWinners(currentRoundId);
         const listEl = document.getElementById("winnersList");
         listEl.innerHTML = "";
-
         if (winners.length === 0) {
             listEl.innerHTML = '<div class="winner-addr">No voters for the winning option</div>';
         } else {
@@ -384,9 +385,8 @@ async function updateWinnerSection() {
                 listEl.appendChild(div);
             });
         }
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
 
-    // Check if current user can claim
     if (userAddress) {
         try {
             const claimable = await contract.claimableBalances(userAddress);
@@ -395,57 +395,79 @@ async function updateWinnerSection() {
                 const claimEth = ethers.formatEther(claimable);
                 document.getElementById("claimableAmount").textContent =
                     `Claimable: ${parseFloat(claimEth).toFixed(4)} ETH`;
+                showWinOverlay(claimEth);
             } else {
                 claimSection.classList.add("hidden");
+                if (!resultShown && roundData.isDrawn) {
+                    showLoseOverlay();
+                }
             }
-        } catch (e) {
+        } catch {
             claimSection.classList.add("hidden");
         }
     }
 }
 
+// ── WIN / LOSE OVERLAYS ──
+function showWinOverlay(ethAmount) {
+    if (resultShown) return;
+    resultShown = true;
+    document.getElementById("winAmount").textContent = `${parseFloat(ethAmount).toFixed(4)} ETH`;
+    document.getElementById("winOverlay").classList.remove("hidden");
+}
+
+function closeWinOverlay() {
+    document.getElementById("winOverlay").classList.add("hidden");
+}
+
+function showLoseOverlay() {
+    if (resultShown) return;
+    resultShown = true;
+    const winLabel = OPTION_LABELS[(roundData.winningOption - 1) % OPTION_LABELS.length];
+    document.getElementById("loseSub").textContent =
+        `The winning option was ${winLabel} (#${roundData.winningOption}). Better luck next time!`;
+    document.getElementById("loseOverlay").classList.remove("hidden");
+}
+
+function closeLoseOverlay() {
+    document.getElementById("loseOverlay").classList.add("hidden");
+}
+
 // ── CLAIM REWARD ──
 async function claimReward() {
     const btn = document.getElementById("claimBtn");
-    btn.disabled = true;
-    btn.textContent = "⏳ Claiming...";
+    const winBtn = document.getElementById("winClaimBtn");
+    if (btn) btn.disabled = true;
+    if (winBtn) winBtn.disabled = true;
 
     try {
         const tx = await contract.claimReward();
         log(`Claim TX sent: ${tx.hash.slice(0, 14)}...`, "warn");
-
         const receipt = await tx.wait();
         if (receipt.status === 1) {
-            log("🎉 Reward claimed successfully!", "success");
-            btn.textContent = "✅ Claimed!";
+            log("Reward claimed successfully!", "success");
+            if (btn) btn.textContent = "Claimed!";
+            if (winBtn) winBtn.textContent = "Claimed!";
             await refreshAll();
         } else {
-            throw new Error("Claim transaction reverted");
+            throw new Error("Claim reverted");
         }
     } catch (err) {
         let msg = err.reason || err.message || "Unknown error";
         if (msg.includes("No rewards")) msg = "No rewards to claim";
-        if (msg.includes("user rejected")) msg = "Transaction rejected by user";
-
+        if (msg.includes("user rejected")) msg = "Transaction rejected";
         log(`Claim failed: ${msg}`, "error");
-        btn.disabled = false;
-        btn.textContent = "💸 Claim Reward";
+        if (btn) { btn.disabled = false; btn.textContent = "Claim Reward"; }
+        if (winBtn) { winBtn.disabled = false; winBtn.textContent = "Claim Reward"; }
     }
 }
 
-// ── LOGGING ──
+// ── LOG ──
 function log(message, type = "info") {
-    const logContainer = document.getElementById("activityLog");
+    const container = document.getElementById("activityLog");
     const entry = document.createElement("div");
     entry.className = `log-entry log-${type}`;
-
-    const time = new Date().toLocaleTimeString();
-    entry.textContent = `[${time}] ${message}`;
-
-    logContainer.prepend(entry);
-
-    // Keep only last 50 entries
-    while (logContainer.children.length > 50) {
-        logContainer.removeChild(logContainer.lastChild);
-    }
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    container.prepend(entry);
+    while (container.children.length > 50) container.removeChild(container.lastChild);
 }

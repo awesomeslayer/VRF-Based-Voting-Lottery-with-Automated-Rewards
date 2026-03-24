@@ -144,4 +144,43 @@ contract VotingLotteryMultiRound is VRFConsumerBaseV2Plus {
     function getCurrentRoundData() external view returns (RoundInfo memory) {
         return rounds[currentRoundId];
     }
+
+    function getVoterCount(uint256 _roundId, uint8 _option) external view returns (uint256) {
+        return votersByRoundAndOption[_roundId][_option].length;
+    }
+
+    function getVoters(uint256 _roundId, uint8 _option) external view returns (address[] memory) {
+        return votersByRoundAndOption[_roundId][_option];
+    }
+
+    function getWinners(uint256 _roundId) external view returns (address[] memory) {
+        RoundInfo memory round = rounds[_roundId];
+        if (!round.isDrawn) return new address[](0);
+        return votersByRoundAndOption[_roundId][round.winningOption];
+    }
+
+    function getRoundInfo(uint256 _roundId) external view returns (
+        uint8 state,
+        uint256 pot,
+        uint256 endTime,
+        uint256 entryFee,
+        uint8 numOptions,
+        bool splitAmongAll,
+        uint256 totalEntries,
+        bool isDrawn,
+        uint8 winningOption
+    ) {
+        RoundInfo memory r = rounds[_roundId];
+        return (
+            uint8(r.state),
+            r.totalPot,
+            r.endTime,
+            r.entryFee,
+            r.numOptions,
+            r.splitAmongAllWinners,
+            r.totalEntries,
+            r.isDrawn,
+            r.winningOption
+        );
+    }
 }
