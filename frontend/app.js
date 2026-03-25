@@ -1,4 +1,4 @@
-// frontend/app.js — VotingLotteryMultiRound frontend (Production)
+// frontend/app.js
 
 const CONTRACT_ADDRESS = "your contract address";
 const EXPECTED_CHAIN_ID = 11155111; // Sepolia

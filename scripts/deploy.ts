@@ -4,8 +4,8 @@ import path from "path";
 require("dotenv").config();
 
 async function main() {
-  const vrfCoordinator = "0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B"; // Sepolia
   const subId = process.env.VRF_SUB_ID || "YOUR_SUB_ID";
+  const vrfCoordinator = "0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B"; // Sepolia
   const keyHash = "0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae";
 
   console.log("Deploying VotingLotteryMultiRound...");
