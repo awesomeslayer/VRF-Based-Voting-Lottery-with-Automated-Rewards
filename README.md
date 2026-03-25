@@ -1,29 +1,28 @@
 
 # VRF-Based Voting Lottery with Automated Rewards
 
-This project implements a decentralized lottery system on the Ethereum Sepolia testnet. Participants enter the lottery by paying a fixed fee and voting for specific options. Once the predefined entry window closes, an off-chain Python automation script triggers the smart contract. The contract requests cryptographically secure randomness via Chainlink VRF v2.5 to select a winning option and a random winner among the voters, allocating the prize pool securely using a pull-over-push pattern.
+This project implements a decentralized multi-round lottery system on the Ethereum Sepolia testnet. Participants enter the lottery by paying a configurable entry fee and voting for one of several options. Once the predefined entry window closes, an off-chain Python automation script triggers the smart contract. The contract requests cryptographically secure randomness via Chainlink VRF v2.5 to select a winning option. Depending on the round configuration, either all voters on the winning option split the prize pool or a single random winner is selected. Rewards are allocated securely using a pull-over-push pattern.
 
 ---
 
 ## Project Architecture & Flow
 
-1. **User Entry:** Users call `enterLottery(option)` sending 0.01 ETH.
-2. **Monitoring:** A Python bot continuously checks the lottery deadline via Web3.py.
-3. **Trigger:** Once the deadline passes, the bot executes `triggerDraw()`.
-4. **VRF Request:** The smart contract halts entries and requests a random number from Chainlink VRF.
-5. **Resolution:** Chainlink callbacks `fulfillRandomWords`, the contract computes the winner, updates balances, and emits the `WinnerSelected` event.
-6. **Automation Complete:** The bot catches the event and logs the result. Winners can claim their rewards via `claimReward()`.
+1. **Round Creation:** The owner calls `startNewRound()` specifying the entry fee, duration, number of options, and prize distribution mode.
+2. **User Entry:** Users call `enterLottery(option)` sending the round's entry fee (e.g., 0.001 ETH).
+3. **Monitoring:** A Python bot continuously checks the lottery deadline via Web3.py.
+4. **Trigger:** Once the deadline passes, the bot executes `triggerDraw()`.
+5. **VRF Request:** The smart contract halts entries and requests random words from Chainlink VRF.
+6. **Resolution:** Chainlink calls back `fulfillRandomWords`. The contract picks a winning option using the first random word. If `splitAmongAllWinners` is enabled, the entire prize pool is divided equally among all voters on the winning option. Otherwise, the second random word selects a single random winner from that option. Balances are updated and the `WinnersSelected` event is emitted.
+7. **Automation Complete:** The bot catches the event and logs the result. Winners can claim their rewards via `claimReward()`.
 
 ---
 
 ## Prerequisites
 
-Before running this project, ensure you have the following installed:
 - Node.js (v18 or higher)
 - Python (v3.10 or higher)
 - MetaMask extension (configured for the Sepolia testnet)
 
----
 
 ## Installation Guide
 
@@ -109,8 +108,6 @@ DURATION_MINUTES="5"
    ```bash
    npx hardhat run scripts/deploy.ts --network sepolia
    ```
-   
-   ![Deployment Terminal](pictures/terminal_deploy.png)
 
 4. The deployed contract address will be automatically added to `CONTRACT_ADDRESS` in `.env`.
 5. Verify your contract using:    
@@ -123,8 +120,10 @@ DURATION_MINUTES="5"
 
 ## Running the Project
 
-1. **Enter the Lottery (Optional):** You can enter the lottery by calling `enterLottery()` and sending entry fee (e.g. 0.01 ETH) via a custom script or Etherscan before the time expires.
-2. **Start the Automation Bot:**
+1. If the current round is `CLOSED`, as the owner call `startNewRound()` specifying parameters.
+
+2. **Enter the Lottery:** You can enter the lottery by calling `enterLottery()` and sending the round's entry fee (e.g., 0.001 ETH) via a custom script or Etherscan before the time expires.
+3. **Start the Automation Bot:**
    ```bash
    cd automation
    source venv/bin/activate
@@ -133,7 +132,7 @@ DURATION_MINUTES="5"
 
 ### Expected Bot Output
 
-The bot will monitor the blockchain. Once the deadline passes, it will trigger the contract, wait for the VRF callback, and output the final result (winning option and the winner's address).
+The bot will monitor the blockchain. Once the deadline passes, it will trigger the contract, wait for the VRF callback, and output the final result (winning option and the winner's address or addresses).
 
 ![Bot Output](pictures/bot_output.png)
 
@@ -141,16 +140,6 @@ The bot will monitor the blockchain. Once the deadline passes, it will trigger t
 
 ## Starting a New Lottery Round
 
-By design, to ensure maximum security and prevent manipulation of past balances, this smart contract represents a **single-round lottery**. Once the draw is completed, the state permanently changes to `CLOSED`.
+The contract supports **multiple sequential rounds** without redeployment. Once a round is drawn and closed, the owner can call `startNewRound()` with new parameters (entry fee, duration, number of options, distribution mode) to begin the next round. The bot or a script can invoke this automatically, or it can be done manually via Etherscan.
 
-If you want to run a fresh lottery round for a new demonstration:
-1. **Deploy a New Contract:** Run `npx hardhat run scripts/deploy.ts --network sepolia` again.
-2. **Update `.env`:** Replace the `CONTRACT_ADDRESS` variable with the newly generated address.
-3. **Authorize the New Contract:** Go to your Chainlink VRF Subscription dashboard and add the new contract address as a "Consumer".
-4. **Run the Bot:** Restart `python bot.py` to monitor the new 5-minute round.
-
----
-
-## Security & Architecture Considerations
-- **Provable Fairness:** Using Chainlink VRF guarantees that the random number is generated off-chain with a cryptographic proof. It is mathematically impossible for miners or the developer to predict or manipulate the winning option.
-- **Pull over Push:** The system uses the "Pull over Push" design pattern. Instead of sending ETH automatically (which exposes the contract to reentrancy attacks), the contract allocates the prize to a `claimableBalances` mapping. The winner must explicitly call `claimReward()` to retrieve their funds safely.
+If the previous round expired with zero entries, `startNewRound()` will auto-close it before creating the next round.
