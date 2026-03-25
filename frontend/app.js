@@ -1,9 +1,13 @@
-// frontend/app.js — VotingLotteryMultiRound frontend
+// frontend/app.js — VotingLotteryMultiRound frontend (Production)
 
-let CONTRACT_ADDRESS = "";
+const CONTRACT_ADDRESS = "your contract address";
+const EXPECTED_CHAIN_ID = 11155111; // Sepolia
+const SEPOLIA_RPC = "https://rpc.sepolia.org";
+
 let provider = null;
 let signer = null;
 let contract = null;
+let readContract = null; // read-only for non-connected users
 let contractAbi = null;
 let userAddress = null;
 let roundData = null;
@@ -14,6 +18,7 @@ let endTimeCache = 0;
 let currentRoundId = 0;
 let userVotedOption = 0;
 let resultShown = false;
+let isProcessing = false; // prevent double-clicks
 
 const OPTION_COLORS = [
     "#6c5ce7", "#00b894", "#e17055", "#fdcb6e",
@@ -38,21 +43,44 @@ document.addEventListener("DOMContentLoaded", async () => {
         contractAbi = await resp.json();
         log("ABI loaded.", "info");
     } catch {
-        log("Could not load abi.json. Deploy the contract first.", "error");
+        log("Could not load abi.json.", "error");
         return;
     }
 
+    // Load read-only data even without wallet
+    await initReadOnly();
+
+    // Auto-connect if previously connected
     if (typeof window.ethereum !== "undefined") {
         const accounts = await window.ethereum.request({ method: "eth_accounts" });
         if (accounts.length > 0) await connectWallet();
     }
 });
 
+// ── READ-ONLY INIT (works without MetaMask) ──
+async function initReadOnly() {
+    try {
+        const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+        readContract = new ethers.Contract(CONTRACT_ADDRESS, contractAbi, readProvider);
+
+        const link = document.getElementById("contractLink");
+        link.textContent = CONTRACT_ADDRESS.slice(0, 10) + "..." + CONTRACT_ADDRESS.slice(-8);
+        link.href = `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
+
+        await refreshAll();
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(refreshAll, 8000);
+        log("Viewing contract (read-only). Connect wallet to vote.", "info");
+    } catch (err) {
+        log(`Read-only init failed: ${err.message}`, "error");
+    }
+}
+
 // ── CONNECT ──
 async function connectWallet() {
     if (typeof window.ethereum === "undefined") {
         log("MetaMask not detected!", "error");
-        alert("Please install MetaMask.");
+        alert("Please install MetaMask to participate.\nhttps://metamask.io");
         return;
     }
     try {
@@ -62,20 +90,27 @@ async function connectWallet() {
         userAddress = accounts[0];
 
         const network = await provider.getNetwork();
+
         document.getElementById("connectBtn").classList.add("hidden");
         document.getElementById("accountInfo").classList.remove("hidden");
         document.getElementById("accountAddress").textContent =
             userAddress.slice(0, 6) + "..." + userAddress.slice(-4);
 
-        if (Number(network.chainId) !== 11155111 && Number(network.chainId) !== 1337) {
+        if (Number(network.chainId) !== EXPECTED_CHAIN_ID) {
             document.getElementById("networkWarning").classList.remove("hidden");
-            log("Wrong network! Switch to Sepolia or local Hardhat.", "warn");
+            log("Wrong network! Attempting to switch to Sepolia...", "warn");
+            await switchToSepolia();
             return;
         }
 
         document.getElementById("networkWarning").classList.add("hidden");
         log(`Connected: ${userAddress.slice(0, 10)}...`, "success");
-        await initContract();
+
+        // Upgrade to signer-based contract
+        contract = new ethers.Contract(CONTRACT_ADDRESS, contractAbi, signer);
+        readContract = contract; // use signer contract for reads too
+
+        await refreshAll();
 
         window.ethereum.on("accountsChanged", () => window.location.reload());
         window.ethereum.on("chainChanged", () => window.location.reload());
@@ -84,50 +119,56 @@ async function connectWallet() {
     }
 }
 
-// ── INIT CONTRACT ──
-async function initContract() {
-    if (!CONTRACT_ADDRESS) {
-        const stored = localStorage.getItem("CONTRACT_ADDRESS");
-        if (stored) {
-            CONTRACT_ADDRESS = stored;
-        } else {
-            CONTRACT_ADDRESS = prompt("Enter the deployed contract address:", "0x...");
-            if (CONTRACT_ADDRESS) localStorage.setItem("CONTRACT_ADDRESS", CONTRACT_ADDRESS);
-        }
-    }
-    if (!CONTRACT_ADDRESS || CONTRACT_ADDRESS === "0x...") {
-        log("No contract address.", "error");
-        return;
-    }
-
+// ── AUTO SWITCH NETWORK ──
+async function switchToSepolia() {
     try {
-        contract = new ethers.Contract(CONTRACT_ADDRESS, contractAbi, signer);
-        const link = document.getElementById("contractLink");
-        link.textContent = CONTRACT_ADDRESS.slice(0, 10) + "..." + CONTRACT_ADDRESS.slice(-8);
-        link.href = `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
-        log(`Contract loaded: ${CONTRACT_ADDRESS.slice(0, 10)}...`, "success");
-
-        await refreshAll();
-        if (refreshInterval) clearInterval(refreshInterval);
-        refreshInterval = setInterval(refreshAll, 8000);
-    } catch (err) {
-        log(`Failed to init contract: ${err.message}`, "error");
+        await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: "0xaa36a7" }], // 11155111 in hex
+        });
+        window.location.reload();
+    } catch (switchError) {
+        // Chain not added to MetaMask — add it
+        if (switchError.code === 4902) {
+            try {
+                await window.ethereum.request({
+                    method: "wallet_addEthereumChain",
+                    params: [{
+                        chainId: "0xaa36a7",
+                        chainName: "Sepolia Testnet",
+                        nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+                        rpcUrls: ["https://rpc.sepolia.org"],
+                        blockExplorerUrls: ["https://sepolia.etherscan.io"]
+                    }]
+                });
+                window.location.reload();
+            } catch (addError) {
+                log(`Failed to add Sepolia: ${addError.message}`, "error");
+            }
+        } else {
+            log(`Failed to switch network: ${switchError.message}`, "error");
+        }
     }
 }
 
 // ── REFRESH ALL ──
 async function refreshAll() {
+    const activeContract = contract || readContract;
+    if (!activeContract) return;
+
     try {
-        currentRoundId = Number(await contract.currentRoundId());
+        currentRoundId = Number(await activeContract.currentRoundId());
         if (currentRoundId === 0) {
-            log("No round started yet. Owner needs to start a round.", "warn");
+            log("No round started yet.", "warn");
             document.getElementById("roundBadge").textContent = "No active round";
             return;
         }
 
         document.getElementById("roundBadge").textContent = `Round #${currentRoundId}`;
 
-        const info = await contract.getRoundInfo(currentRoundId);
+        const info = await activeContract.getRoundInfo(currentRoundId);
+        const prevState = roundData?.state;
+
         roundData = {
             state: Number(info[0]),
             pot: info[1],
@@ -141,9 +182,15 @@ async function refreshAll() {
         };
         endTimeCache = roundData.endTime;
 
+        // Reset resultShown when new round starts
+        if (prevState === 2 && roundData.state === 0) {
+            resultShown = false;
+            userVotedOption = 0;
+        }
+
         voterCounts = [];
         for (let i = 1; i <= roundData.numOptions; i++) {
-            const c = Number(await contract.getVoterCount(currentRoundId, i));
+            const c = Number(await activeContract.getVoterCount(currentRoundId, i));
             voterCounts.push(c);
         }
 
@@ -207,7 +254,7 @@ function updateDistribution() {
     }
 }
 
-// ── ODDS & PAYOUTS (casino-style) ──
+// ── ODDS & PAYOUTS ──
 function updateOdds() {
     const grid = document.getElementById("oddsGrid");
     grid.innerHTML = "";
@@ -228,9 +275,13 @@ function updateOdds() {
                 payoutText = `${parseFloat(ethers.formatEther(share)).toFixed(4)} ETH`;
             } else {
                 coefficient = total > 0 ? `${total + 1}.00` : "-.--";
-                payoutText = total > 0 ? `${parseFloat(ethers.formatEther(potWei + roundData.entryFee)).toFixed(4)} ETH` : "-- ETH";
+                payoutText = total > 0
+                    ? `${parseFloat(ethers.formatEther(potWei + roundData.entryFee)).toFixed(4)} ETH`
+                    : "-- ETH";
             }
-            impliedProb = total > 0 ? ((1 / parseFloat(coefficient || total)) * 100).toFixed(1) : "--";
+            impliedProb = total > 0
+                ? ((1 / parseFloat(coefficient || total)) * 100).toFixed(1)
+                : "--";
         } else {
             if (count > 0) {
                 coefficient = (total / count).toFixed(2);
@@ -239,7 +290,9 @@ function updateOdds() {
                 coefficient = total > 0 ? `${total + 1}.00` : "-.--";
                 payoutText = `${parseFloat(ethers.formatEther(potWei)).toFixed(4)} ETH`;
             }
-            impliedProb = total > 0 && count > 0 ? ((count / total) * 100).toFixed(1) : "--";
+            impliedProb = total > 0 && count > 0
+                ? ((count / total) * 100).toFixed(1)
+                : "--";
         }
 
         const card = document.createElement("div");
@@ -260,7 +313,7 @@ function updateOptionsGrid() {
     grid.innerHTML = "";
     const isOpen = roundData.state === 0;
     const now = Math.floor(Date.now() / 1000);
-    const canVote = isOpen && now < roundData.endTime;
+    const canVote = isOpen && now < roundData.endTime && !!contract; // need signer
 
     for (let i = 0; i < roundData.numOptions; i++) {
         const color = OPTION_COLORS[i % OPTION_COLORS.length];
@@ -270,7 +323,16 @@ function updateOptionsGrid() {
 
         const btn = document.createElement("button");
         btn.className = "option-btn";
-        btn.disabled = !canVote;
+
+        if (!contract) {
+            btn.disabled = true;
+            btn.title = "Connect wallet to vote";
+        } else if (!canVote) {
+            btn.disabled = true;
+        } else if (isProcessing) {
+            btn.disabled = true;
+        }
+
         btn.style.setProperty("--opt-color", color);
 
         btn.innerHTML = `
@@ -282,19 +344,41 @@ function updateOptionsGrid() {
         btn.addEventListener("click", () => enterLottery(optionNum));
         grid.appendChild(btn);
     }
+
+    // Show connect hint if wallet not connected
+    if (!contract && roundData.state === 0) {
+        const hint = document.createElement("div");
+        hint.className = "connect-hint";
+        hint.textContent = "Connect your wallet to vote";
+        hint.style.cssText = "grid-column:1/-1;text-align:center;color:var(--text-muted);padding:1rem;";
+        grid.appendChild(hint);
+    }
 }
 
 // ── ENTER LOTTERY ──
 async function enterLottery(option) {
+    if (!contract) {
+        log("Connect your wallet first!", "error");
+        return;
+    }
+    if (isProcessing) {
+        log("Transaction already in progress...", "warn");
+        return;
+    }
+
+    isProcessing = true;
     const statusEl = document.getElementById("entryStatus");
     statusEl.classList.remove("hidden", "success", "error", "pending");
     statusEl.classList.add("pending");
     statusEl.textContent = `Sending transaction for Option ${option}...`;
 
+    // Disable all buttons during transaction
+    document.querySelectorAll(".option-btn").forEach(b => b.disabled = true);
+
     try {
         const tx = await contract.enterLottery(option, { value: roundData.entryFee });
         log(`TX sent: ${tx.hash.slice(0, 14)}...`, "warn");
-        statusEl.textContent = `Waiting for confirmation... TX: ${tx.hash.slice(0, 14)}...`;
+        statusEl.innerHTML = `Waiting for confirmation... <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank" rel="noopener">View TX</a>`;
 
         const receipt = await tx.wait();
         if (receipt.status === 1) {
@@ -315,8 +399,11 @@ async function enterLottery(option) {
         if (msg.includes("Not open")) msg = "Lottery is not currently open";
         if (msg.includes("Time's up")) msg = "Entry window has closed";
         if (msg.includes("user rejected")) msg = "Transaction rejected by user";
+        if (msg.includes("insufficient funds")) msg = "Insufficient ETH balance";
         statusEl.textContent = msg;
         log(`Entry failed: ${msg}`, "error");
+    } finally {
+        isProcessing = false;
     }
 }
 
@@ -359,6 +446,7 @@ function startTimer() {
 async function updateWinnerSection() {
     const section = document.getElementById("winnerSection");
     const claimSection = document.getElementById("claimSection");
+    const activeContract = contract || readContract;
 
     if (!roundData.isDrawn) {
         section.style.display = "none";
@@ -367,12 +455,13 @@ async function updateWinnerSection() {
 
     section.style.display = "block";
     const winLabel = OPTION_LABELS[(roundData.winningOption - 1) % OPTION_LABELS.length];
-    document.getElementById("winOptionDisplay").textContent = `${winLabel} (#${roundData.winningOption})`;
+    document.getElementById("winOptionDisplay").textContent =
+        `${winLabel} (#${roundData.winningOption})`;
     const prizeEth = ethers.formatEther(roundData.pot);
     document.getElementById("winPrizeDisplay").textContent = parseFloat(prizeEth).toFixed(4);
 
     try {
-        const winners = await contract.getWinners(currentRoundId);
+        const winners = await activeContract.getWinners(currentRoundId);
         const listEl = document.getElementById("winnersList");
         listEl.innerHTML = "";
         if (winners.length === 0) {
@@ -381,13 +470,16 @@ async function updateWinnerSection() {
             winners.forEach((addr, i) => {
                 const div = document.createElement("div");
                 div.className = "winner-addr";
-                div.textContent = `#${i + 1}: ${addr.slice(0, 8)}...${addr.slice(-6)}`;
+                const isYou = userAddress && addr.toLowerCase() === userAddress.toLowerCase();
+                div.textContent = `#${i + 1}: ${addr.slice(0, 8)}...${addr.slice(-6)}${isYou ? " (YOU!)" : ""}`;
+                if (isYou) div.style.color = "var(--success)";
                 listEl.appendChild(div);
             });
         }
     } catch { /* ignore */ }
 
-    if (userAddress) {
+    // Claim section — only if wallet connected
+    if (userAddress && contract) {
         try {
             const claimable = await contract.claimableBalances(userAddress);
             if (claimable > 0n) {
@@ -398,7 +490,7 @@ async function updateWinnerSection() {
                 showWinOverlay(claimEth);
             } else {
                 claimSection.classList.add("hidden");
-                if (!resultShown && roundData.isDrawn) {
+                if (!resultShown && roundData.isDrawn && userVotedOption > 0) {
                     showLoseOverlay();
                 }
             }
@@ -412,7 +504,8 @@ async function updateWinnerSection() {
 function showWinOverlay(ethAmount) {
     if (resultShown) return;
     resultShown = true;
-    document.getElementById("winAmount").textContent = `${parseFloat(ethAmount).toFixed(4)} ETH`;
+    document.getElementById("winAmount").textContent =
+        `${parseFloat(ethAmount).toFixed(4)} ETH`;
     document.getElementById("winOverlay").classList.remove("hidden");
 }
 
@@ -435,6 +528,13 @@ function closeLoseOverlay() {
 
 // ── CLAIM REWARD ──
 async function claimReward() {
+    if (!contract) {
+        log("Connect wallet to claim!", "error");
+        return;
+    }
+    if (isProcessing) return;
+    isProcessing = true;
+
     const btn = document.getElementById("claimBtn");
     const winBtn = document.getElementById("winClaimBtn");
     if (btn) btn.disabled = true;
@@ -446,8 +546,8 @@ async function claimReward() {
         const receipt = await tx.wait();
         if (receipt.status === 1) {
             log("Reward claimed successfully!", "success");
-            if (btn) btn.textContent = "Claimed!";
-            if (winBtn) winBtn.textContent = "Claimed!";
+            if (btn) btn.textContent = "Claimed! ✓";
+            if (winBtn) winBtn.textContent = "Claimed! ✓";
             await refreshAll();
         } else {
             throw new Error("Claim reverted");
@@ -459,12 +559,15 @@ async function claimReward() {
         log(`Claim failed: ${msg}`, "error");
         if (btn) { btn.disabled = false; btn.textContent = "Claim Reward"; }
         if (winBtn) { winBtn.disabled = false; winBtn.textContent = "Claim Reward"; }
+    } finally {
+        isProcessing = false;
     }
 }
 
 // ── LOG ──
 function log(message, type = "info") {
     const container = document.getElementById("activityLog");
+    if (!container) return;
     const entry = document.createElement("div");
     entry.className = `log-entry log-${type}`;
     entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
