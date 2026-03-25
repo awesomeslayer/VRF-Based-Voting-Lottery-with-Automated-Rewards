@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VRF Lottery</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Win Overlay -->
+<div id="winOverlay" class="win-overlay hidden">
+    <div class="win-content">
+        <div class="win-confetti"></div>
+        <div class="win-icon">&#127942;</div>
+        <h1 class="win-title">YOU WON!</h1>
+        <div class="win-amount" id="winAmount">0.00 ETH</div>
+        <p class="win-sub" id="winSub">Congratulations! Claim your reward below.</p>
+        <button id="winClaimBtn" class="btn btn-gold btn-large">Claim Reward</button>
+        <button class="btn btn-ghost" onclick="closeWinOverlay()">Close</button>
+    </div>
+</div>
+
+<!-- Lose Overlay -->
+<div id="loseOverlay" class="lose-overlay hidden">
+    <div class="lose-content">
+        <div class="lose-icon">&#128546;</div>
+        <h1 class="lose-title">Round Over</h1>
+        <p class="lose-sub" id="loseSub">The winning option was different from yours. Better luck next time!</p>
+        <button class="btn btn-ghost" onclick="closeLoseOverlay()">Close</button>
+    </div>
+</div>
+
+<div class="app">
+
+    <!-- Header -->
+    <header>
+        <h1 class="logo-text">VRF LOTTERY</h1>
+    </header>
+
+    <!-- Connection -->
+    <section class="card connect-card">
+        <button id="connectBtn" class="btn btn-primary btn-large">Connect MetaMask</button>
+        <div id="accountInfo" class="account-info hidden">
+            <span class="dot green"></span>
+            <span id="accountAddress"></span>
+        </div>
+        <div id="networkWarning" class="warning hidden">
+            Please switch to Sepolia testnet (Chain ID: 11155111)
+        </div>
+    </section>
+
+    <!-- Round & Status -->
+    <section class="card">
+        <div class="card-header">
+            <h2>Lottery Status</h2>
+            <span class="round-badge" id="roundBadge">Round #--</span>
+        </div>
+        <div class="status-grid">
+            <div class="status-item">
+                <div class="status-label">State</div>
+                <div id="stateDisplay" class="status-value">
+                    <span class="badge badge-loading">Loading...</span>
+                </div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Time Remaining</div>
+                <div id="timerDisplay" class="status-value timer">--:--</div>
+            </div>
+            <div class="status-item highlight-pot">
+                <div class="status-label">Prize Pool</div>
+                <div id="potDisplay" class="status-value pot">0 ETH</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Players</div>
+                <div id="entriesDisplay" class="status-value">0</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Entry Fee</div>
+                <div id="feeDisplay" class="status-value">-- ETH</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Winner Mode</div>
+                <div id="modeDisplay" class="status-value">--</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Voting Options -->
+    <section class="card" id="votingSection">
+        <h2>Place Your Bet</h2>
+        <div id="optionsGrid" class="options-grid"></div>
+        <div id="entryStatus" class="entry-status hidden"></div>
+    </section>
+
+    <!-- Vote Distribution -->
+    <section class="card" id="distributionSection">
+        <h2>Vote Distribution</h2>
+        <div id="distributionBars" class="distribution-bars"></div>
+    </section>
+
+    <!-- Betting Odds -->
+    <section class="card" id="oddsSection">
+        <h2>Odds &amp; Payouts</h2>
+        <div id="oddsGrid" class="odds-grid"></div>
+    </section>
+
+    <!-- Winner Announcement -->
+    <section class="card card-winner" id="winnerSection" style="display:none;">
+        <h2>Winner Announced</h2>
+        <div class="winner-display">
+            <div class="winner-option">
+                Winning Option: <strong id="winOptionDisplay">--</strong>
+            </div>
+            <div id="winnersList" class="winners-list"></div>
+            <div class="winner-prize">
+                Prize Pool: <strong id="winPrizeDisplay">0</strong> ETH
+            </div>
+        </div>
+        <div id="claimSection" class="claim-section hidden">
+            <p>You have unclaimed rewards!</p>
+            <button id="claimBtn" class="btn btn-gold btn-large">Claim Reward</button>
+            <div id="claimableAmount" class="claimable-amount"></div>
+        </div>
+    </section>
+
+    <!-- Activity Log -->
+    <section class="card">
+        <h2>Activity Log</h2>
+        <div id="activityLog" class="activity-log">
+            <div class="log-entry log-info">Waiting for connection...</div>
+        </div>
+    </section>
+
+    <!-- Contract Info -->
+    <section class="card card-small">
+        <div class="contract-info">
+            <span>Contract:</span>
+            <a id="contractLink" href="#" target="_blank" class="mono">Not loaded</a>
+        </div>
+    </section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
