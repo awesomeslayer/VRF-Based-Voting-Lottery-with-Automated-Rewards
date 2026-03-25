@@ -63,6 +63,12 @@ Create a `.env` file in the root directory:
 RPC_URL=""
 PRIVATE_KEY=""
 CONTRACT_ADDRESS=""
+
+# Contract
+NUM_OPTIONS="4"
+SPLIT_AMONG_ALL="true"
+ENTRY_FEE="0.001"
+DURATION_MINUTES="5"
 ```
 
 ### 2. Acquiring API Keys and Testnet Funds
@@ -106,14 +112,18 @@ CONTRACT_ADDRESS=""
    
    ![Deployment Terminal](pictures/terminal_deploy.png)
 
-4. Copy the deployed contract address and add it to `CONTRACT_ADDRESS` in `.env`.
-5. **CRITICAL:** Return to the [Chainlink VRF Dashboard](https://vrf.chain.link/), open your subscription, click **"Add consumer"**, and paste your contract address.
+4. The deployed contract address will be automatically added to `CONTRACT_ADDRESS` in `.env`.
+5. Verify your contract using:    
+    ```bash
+    bash verify.sh
+    ```
+6. **CRITICAL:** Return to the [Chainlink VRF Dashboard](https://vrf.chain.link/), open your subscription, click **"Add consumer"**, and paste your contract address.
 
 ---
 
 ## Running the Project
 
-1. **Enter the Lottery (Optional):** You can enter the lottery by calling `enterLottery(1)` and sending 0.01 ETH via a custom script or Etherscan before the time expires.
+1. **Enter the Lottery (Optional):** You can enter the lottery by calling `enterLottery()` and sending entry fee (e.g. 0.01 ETH) via a custom script or Etherscan before the time expires.
 2. **Start the Automation Bot:**
    ```bash
    cd automation
